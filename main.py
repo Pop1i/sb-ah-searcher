@@ -1,42 +1,57 @@
 import requests
+import threading
 import colorama
 
 colorama.init(autoreset=True)
 
-search = input("item to search for: ")
+search = input("Search For: ")
 
-url = "https://api.hypixel.net/skyblock/auctions"
+base_url = "https://api.hypixel.net/skyblock/auctions"
 
-data = requests.get(url=url).json()
+def get_totalPages():
+    return requests.get(url=base_url).json()["totalPages"]
 
-auctions = []
-for i in range(data["totalPages"]):
-    data = requests.get(url=f"{url}?page={i}").json()
+def search_auctions(search):
     
-    for item in data["auctions"]:
-        auctions.append(item)
+    items = []
 
-for item in auctions:
-    if item["bin"] == True:
-        item_name = item["item_name"]
-        if search.lower() in item_name.lower():
-            item_rarity = item["tier"]
+    def fetch_auctions(page):
+        url = f"{base_url}?page={page}"
+        data = requests.get(url=url).json()
 
-            item_price = item["starting_bid"]
-            item_price = colorama.Fore.YELLOW + "{:,}".format(item_price)
+        for item in data["auctions"]:
+            if item["bin"] and search.lower() in item["item_name"].lower():
+                items.append(item)
+    
+    threads = []
+    for page in range(get_totalPages()):
+        thread = threading.Thread(target=fetch_auctions, args=(page,))
+        threads.append(thread)
+        thread.start()
+    
+    for thread in threads:
+        thread.join()
+    
+    return items
 
-            match item_rarity:
-                case "COMMON":
-                    item_name = colorama.Fore.WHITE + item_name
-                case "UNCOMMON":
-                    item_name = colorama.Fore.GREEN + item_name
-                case "RARE":
-                    item_name = colorama.Fore.BLUE + item_name
-                case "EPIC":
-                    item_name = colorama.Fore.MAGENTA + item_name
-                case "LEGENDARY":
-                    item_name = colorama.Fore.YELLOW + item_name
-                case "SPECIAL":
-                    item_name = colorama.Fore.RED + item_name
+for item in search_auctions(search):
+    item_name = item["item_name"]
+    item_price = colorama.Fore.YELLOW + "{:,}".format(item["starting_bid"]) + colorama.Fore.WHITE
+    item_rarity = item["tier"]
+    item_uuid = item["uuid"]
 
-            print(f"{item_name} : {item_price}")
+    match item_rarity:
+        case "COMMON":
+            item_name = colorama.Fore.WHITE + item_name
+        case "UNCOMMON":
+            item_name = colorama.Fore.GREEN + item_name
+        case "RARE":
+            item_name = colorama.Fore.BLUE + item_name
+        case "EPIC":
+            item_name = colorama.Fore.MAGENTA + item_name
+        case "LEGENDARY":
+            item_name = colorama.Fore.YELLOW + item_name
+        case "SPECIAL":
+            item_name = colorama.Fore.RED + item_name
+
+    print(f"{item_name} : {item_price},  /viewauction {item_uuid}")
